@@ -1,0 +1,28 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/node:8.11
+
+    working_directory: ~/repo
+
+    steps:
+      - checkout
+
+      - run: yarn install
+
+      - run: yarn build
+
+      - deploy:
+          name: Deploy to Now
+          command: |
+            GIT_HASH=$(git rev-parse --short HEAD)
+            SANITIZED_BRANCH=$(tr "/" "-" <<<$CIRCLE_BRANCH)
+            VERY_SANITIZED_BRANCH=$(tr "." "-" <<<$SANITIZED_BRANCH)
+            PR_HOST=$(echo $VERY_SANITIZED_BRANCH-will-mybit-io-dev.now.sh)
+            GIT_HOST=$(echo $GIT_HASH-will-mybit-io-dev.now.sh)
+            echo ${GIT_HASH} > build/version
+            cp CONTRIBUTORS build/contributors
+            BUILD_URL=$(npx now --name will.mybit.io build -t $NOW_DEVELOPMENT_TOKEN --public)
+            npx now alias ${BUILD_URL} ${GIT_HOST} -t $NOW_DEVELOPMENT_TOKEN
+            npx now alias ${BUILD_URL} ${PR_HOST} -t $NOW_DEVELOPMENT_TOKEN
