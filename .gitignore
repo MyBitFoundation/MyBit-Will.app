@@ -73,3 +73,6 @@ typings/
 .bit
 .bitmap
 bit.json
+
+# ide files
+.vscode/

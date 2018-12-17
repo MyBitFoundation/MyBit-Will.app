@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import getWeb3Async from './web3';
+import { BigNumber } from 'bignumber.js';
 
 import * as WillsRopsten from '../constants/contracts/ropsten/Wills';
 import * as MyBitBurnerRopsten from '../constants/contracts/ropsten/MyBitBurner';
@@ -12,6 +13,7 @@ import * as MyBitTokenMainnet from '../constants/contracts/mainnet/MyBitToken';
 import * as WillsPrivate from '../constants/contracts/private/Wills';
 import * as MyBitBurnerPrivate from '../constants/contracts/private/MyBitBurner';
 import * as MyBitTokenPrivate from '../constants/contracts/private/MyBitToken';
+import * as ERC20 from '../constants/contracts/mainnet/ERC20';
 
 import { ETHERSCAN_TX, ETHERSCAN_TX_FULL_PAGE } from '../constants';
 import axios from 'axios';
@@ -30,7 +32,7 @@ const getMyBitBurnerAddress = (network) => {
   }
 }
 
-const getContract = (name, network, address) => {
+export const getContract = (name, network, address) => {
   let contract = undefined;
   if (network === "private") {
     switch (name) {
@@ -42,6 +44,9 @@ const getContract = (name, network, address) => {
         break;
       case 'MyBitToken':
         contract = MyBitTokenPrivate;
+        break;
+      case 'ERC20':
+        contract = ERC20;
         break;
     }
   } else if (network === "ropsten") {
@@ -55,6 +60,9 @@ const getContract = (name, network, address) => {
       case 'MyBitToken':
         contract = MyBitTokenRopsten;
         break;
+      case 'ERC20':
+        contract = ERC20;
+        break;
     }
   } else {
     switch (name) {
@@ -66,6 +74,9 @@ const getContract = (name, network, address) => {
         break;
       case 'MyBitToken':
         contract = MyBitTokenMainnet;
+        break;
+        case 'ERC20':
+        contract = ERC20;
         break;
     }
   }
@@ -123,6 +134,31 @@ export const getApprovalLogs = async (network) =>
     }
   });
 
+export const requestApprovalERC20 = async (userAddress, tokenAddress, amount, decimals, network) => {
+  const tokenContract = getContract('ERC20', network, tokenAddress);
+  const willsAddress = getContract('Wills', network).options.address;
+
+  const weiAmount = web3.utils.toBN(
+    new BigNumber(amount).multipliedBy(new BigNumber(10).exponentiatedBy(new BigNumber(decimals)))
+  )
+
+  const estimatedGas = await tokenContract.methods.approve(willsAddress, weiAmount).estimateGas({ from: userAddress });
+  const gasPrice = await Web3.eth.getGasPrice();
+
+  const approveResponse = await tokenContract.methods
+    .approve(willsAddress, weiAmount)
+    .send({
+      from: userAddress,
+      gas: estimatedGas,
+      gasPrice: gasPrice
+    });
+    
+  const { transactionHash } = approveResponse;
+  return new Promise((resolve, reject) => {
+    checkTransactionStatus(transactionHash, resolve, reject, network);
+  });
+}
+
 export const requestApproval = async (address, network) =>
   new Promise(async (resolve, reject) => {
     try {
@@ -173,8 +209,12 @@ export const getLogWillCreated = async (network) =>
         'LogWillCreated',
         { fromBlock: 0, toBlock: 'latest' },
       );
+      const logERC20Transactions = await willsContract.getPastEvents(
+        'LogERC20WillCreated',
+        { fromBlock: 0, toBlock: 'latest' },
+      );
 
-      resolve(logTransactions);
+      resolve(logTransactions.concat(logERC20Transactions));
     } catch (error) {
       reject(error);
     }
@@ -197,6 +237,37 @@ export const getLogWillClaimed = async (network) =>
     }
   });
 
+  export const createERC20Will = async (from, to, amount, revokable, period, tokenAddress, decimals, network) => {
+    const willsContract = getContract("Wills", network);
+
+    const weiAmount = web3.utils.toBN(
+      new BigNumber(amount).multipliedBy(new BigNumber(10).exponentiatedBy(new BigNumber(decimals)))
+    )  
+    const secBetweenProofs = parseInt(period) * 86400
+
+    const estimatedGas = await willsContract.methods.createERC20Will(
+      to, 
+      secBetweenProofs, 
+      revokable, 
+      tokenAddress, 
+      weiAmount
+      ).estimateGas({ from: from});
+    const gasPrice = await Web3.eth.getGasPrice();
+
+    const willsResponse = await willsContract.methods
+      .createERC20Will(to, secBetweenProofs, revokable, tokenAddress, weiAmount)
+      .send({
+        from: from,
+        gas: estimatedGas,
+        gasPrice: gasPrice
+      });
+
+    const { transactionHash } = willsResponse;
+    return new Promise((resolve, reject) => {
+      checkTransactionStatus(transactionHash, resolve, reject, network);
+    });
+  };
+
 export const createWill = async (from, to, amount, revokable, period, network) =>
   new Promise(async (resolve, reject) => {
     console.log("createWill")
@@ -204,13 +275,14 @@ export const createWill = async (from, to, amount, revokable, period, network) =
       const willsContract = getContract("Wills", network);
 
       const weiAmount = Web3.utils.toWei(amount.toString(), 'ether');
-      console.log("weiAmount", weiAmount, revokable, period, to)
 
-      const estimatedGas = await willsContract.methods.createWill(to, period, revokable).estimateGas({ from: from, value: weiAmount });
+      const secBetweenProofs = parseInt(period) * 86400
+      const estimatedGas = await willsContract.methods.createWill(to, secBetweenProofs, revokable)
+        .estimateGas({ from: from, value: weiAmount });
       const gasPrice = await Web3.eth.getGasPrice();
 
       const willsResponse = await willsContract.methods
-        .createWill(to, period, revokable)
+        .createWill(to, secBetweenProofs, revokable)
         .send({
           value: weiAmount,
           from: from,
@@ -292,6 +364,12 @@ export const getWill = async (id, network) =>
       reject(error);
     }
   });
+
+export const getTokensList = async () => {
+  const res = await fetch('https://api.kyber.network/currencies');
+  const json = await res.json();
+  return json.data;
+}
 
 const checkTransactionStatus = async (
   transactionHash,
