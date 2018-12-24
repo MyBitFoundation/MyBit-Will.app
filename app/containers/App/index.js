@@ -77,16 +77,34 @@ class App extends React.Component {
             />
             <Route path="/create-new" component={() =>
               <BlockchainInfoContext.Consumer>
-                {({ createWill, currentBlock, getTransactions, userAllowed, requestApproval, checkAddressAllowed, user, loading, network }) =>  (
+              {({ 
+                createERC20Will,
+                createWill,
+                currentBlock,
+                getTransactions,
+                getTokensList,
+                tokensList,
+                userAllowed,
+                requestApproval,
+                requestApprovalERC20,
+                checkAddressAllowed, 
+                user,
+                loading,
+                network
+              }) => (
                     <CreateNewPage
                       createWill={createWill}
+                      createERC20Will={createERC20Will}
+                      requestApprovalERC20={requestApprovalERC20}
+                      getTokensList={getTokensList}
+                      tokensList={tokensList}
                       currentBlock={currentBlock}
                       getTransactions={getTransactions}
                       userAllowed={userAllowed}
                       requestApproval={requestApproval}
                       checkAddressAllowed={checkAddressAllowed}
                       user={user}
-                      loading={loading.user}
+                      loading={loading.user || loading.tokensList}
                       network={network}
                       loadingNetwork={loading.network}
                     />

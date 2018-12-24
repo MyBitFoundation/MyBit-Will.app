@@ -16,8 +16,9 @@ import Constants from 'components/Constants';
 import Checkbox from 'antd/lib/checkbox';
 import LoadingIndicator from 'components/LoadingIndicator';
 import ConnectionStatus from 'components/ConnectionStatus';
-
-import 'antd/lib/checkbox/style/css';
+import Select from 'antd/lib/select';
+import 'antd/dist/antd.css';
+const Option = Select.Option;
 
 const blocksPerSecond = 14;
 
@@ -41,16 +42,35 @@ const StyledTermsAndConditionsWrapper = styled.div`
   margin-bottom: 10px;
 `;
 
+const StyledInputWrapper = styled.div`
+  display: flex;
+  color: #1890ff;
+`;
+
+const StyledLargeInput = styled.div`
+  width: 60%
+`
+const StyledSmallInput = styled.div`
+  width: 40%
+`
+
+const HiddenInput = styled.div`
+  .ant-input {
+    display: none
+  }
+`
+
 export default class CreateNewPage extends React.Component {
   constructor(props){
     super(props);
-
+    this.props.getTokensList();
     this.state = {
       shouldConfirm: false,
       isLoading: false,
       acceptedToS: false,
       metamaskInstalled: false,
-      metamaskUnlocked: false
+      metamaskUnlocked: false,
+      tokenSymbol: 'ETH'
     };
     this.details = [];
     this.handleMetamask = this.handleMetamask.bind(this);
@@ -105,8 +125,9 @@ export default class CreateNewPage extends React.Component {
     this.setState({
       shouldConfirm: false,
       recepient: '',
-      amountEth: '',
-      blockNumber: '',
+      amount: '',
+      verifyPeriod: '',
+      tokenSymbol: 'ETH'
     })
   }
 
@@ -115,8 +136,8 @@ export default class CreateNewPage extends React.Component {
   }
 
   async handleConfirm(){
-    const { recepient, blockNumber, amountEth } = this.state;
-    const { currentBlock } = this.props;
+    const { recepient, verifyPeriod, amount, tokenSymbol } = this.state;
+    const token = this.props.tokensList.find(e => e.symbol === tokenSymbol)
 
     let alertType = undefined;
     let alertMessage = undefined;
@@ -128,8 +149,8 @@ export default class CreateNewPage extends React.Component {
     else if(!Web3.utils.isAddress(recepient)){
       alertMessage = "Please enter a valid Ethereum address.";
     }
-    else if(!amountEth || amountEth == 0){
-      alertMessage = "Amount of ETH needs to be higher than zero.";
+    else if(!amount || parseFloat(amount) == 0){
+      alertMessage = "Amount of ETH/Token needs to be higher than zero.";
     }
 
     if(alertMessage){
@@ -148,31 +169,46 @@ export default class CreateNewPage extends React.Component {
       content: [Constants.functions.shortenAddress(recepient) + "."]
     }, {
       title: 'Amount',
-      content: [amountEth + " ETH"]
+      content: [`${amount} ${token.symbol}`]
     }, {
       title: 'Verify Period',
-      content: [blockNumber]
+      content: [`${verifyPeriod} days`]
     })
 
     this.setState({shouldConfirm: true})
     this.setState({ alertType: 'info', alertMessage: "Waiting for confirmations." });
 
-    console.log("hererere")
-
     try {
       let result = true;
-      if(!this.props.userAllowed){
+      if (!this.props.userAllowed) {
         result = await this.props.requestApproval();
       }
 
       console.log(result)
 
-      if(result){
+      if (result && tokenSymbol !== 'ETH') {
+        console.log('here')
+        result = await this.props.requestApprovalERC20(
+          token.address,
+          amount,
+          token.decimals
+        ).catch(console.log)
+        if (result) {
+          result = await this.props.createERC20Will(
+            recepient,
+            amount,
+            false,
+            verifyPeriod,
+            token.address,
+            token.decimals
+          ).catch(console.log)
+        }
+      } else if (result && tokenSymbol === 'ETH') {
         result = await this.props.createWill(
           recepient,
-          amountEth,
+          amount,
           false,
-          blockNumber
+          verifyPeriod
         );
       }
       if (result) {
@@ -183,7 +219,7 @@ export default class CreateNewPage extends React.Component {
       this.props.checkAddressAllowed();
       this.props.getTransactions();
     } catch (err) {
-      this.setState({ alertType: undefined});
+      this.setState({ alertType: 'error', alertMessage: err.message });
     }
   }
 
@@ -228,23 +264,45 @@ export default class CreateNewPage extends React.Component {
           tooltipTitle="Who will recieve your funds on execution?"
           hasTooltip
         />
-        <Input
-          placeholder="Amount ETH"
-          type="number"
-          value={this.state.amountEth}
-          onChange={(number) => this.handleInputChange(number, 'amountEth')}
-          tooltipTitle="How much ETH do you want to send on execution?"
-          hasTooltip
-          min={0}
-        />
+        <StyledInputWrapper>
+          <StyledLargeInput>
+            <Input
+              placeholder="Amount"
+              value={this.state.amount}
+              onChange={(e) => this.handleInputChange(e.target.value, 'amount')}
+              min={0}
+            />
+          </StyledLargeInput>
+          <StyledSmallInput>
+            <Select
+              showSearch
+              style={{ width: '100%' }}
+              placeholder="ETH"
+              optionFilterProp="children"
+              onChange={v => this.handleInputChange(v, 'tokenSymbol')}
+              filterOption={(input, option) => option.props.children.toLowerCase().indexOf(input.toLowerCase()) >= 0}
+            >
+              {this.props.tokensList.map(token => (<Option value={token.symbol}>{token.symbol}</Option>))}
+            </Select>
+          </StyledSmallInput>
+          <HiddenInput>
+            <Input
+              placeholder=""
+              value={null}
+              onChange={() => {}}
+              tooltipTitle="What is the amount and token of the funds?"
+              hasTooltip
+            />
+          </HiddenInput>
+        </StyledInputWrapper>
         <Input
           placeholder="Verify period"
           type="number"
-          value={this.state.blockNumber}
-          onChange={(number) => this.handleInputChange(number, 'blockNumber')}
-          tooltipTitle="How often do you want to check in and delay the transaction in blocks. Default is 1000 blocks."
+          value={this.state.verifyPeriod}
+          onChange={(number) => this.handleInputChange(number, 'verifyPeriod')}
+          tooltipTitle="How often do you want to check in and delay the transaction in days?"
           hasTooltip
-          min={10}
+          min={1}
         />
         <StyledTermsAndConditionsWrapper>
           <Checkbox
@@ -306,12 +364,10 @@ export default class CreateNewPage extends React.Component {
 
 CreateNewPage.defaultProps = {
   userAllowed: false,
-  currentBlock: 0,
 };
 
 CreateNewPage.propTypes = {
   userAllowed: PropTypes.bool.isRequired,
-  currentBlock: PropTypes.number.isRequired,
   user: PropTypes.shape({
     myBitBalance: PropTypes.number.isRequired,
   }).isRequired,

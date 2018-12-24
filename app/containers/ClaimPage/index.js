@@ -237,7 +237,7 @@ export default class ClaimPage extends React.Component {
           <span>
             {transaction.amount}{' '}
             <StyledSymbol>
-              ETH
+              {transaction.symbol}
             </StyledSymbol>
           </span>,
         status: status

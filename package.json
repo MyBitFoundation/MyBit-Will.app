@@ -148,6 +148,7 @@
     "antd": "^3.8.0",
     "axios": "^0.18.0",
     "babel-polyfill": "6.26.0",
+    "bignumber.js": "^8.0.1",
     "chalk": "^2.4.1",
     "classnames": "^2.2.6",
     "compression": "1.7.2",

@@ -187,9 +187,9 @@ export default class VerifyPage extends React.Component {
       key: 'amount',
       align: 'center',
     }, {
-      title: 'Blocks until expiration:',
-      dataIndex: 'block',
-      key: 'block',
+      title: 'Expiration:',
+      dataIndex: 'expiration',
+      key: 'expiration',
       align: 'center',
     }, {
       title: statusHeader,
@@ -242,12 +242,12 @@ export default class VerifyPage extends React.Component {
           <span>
             {transaction.amount}{' '}
             <StyledSymbol>
-              ETH
+              {transaction.symbol}
             </StyledSymbol>
           </span>,
-        block:
+        expiration:
           <span>
-            {transaction.block > 0 ? transaction.block : 0}
+            {new Date(transaction.expiration*1000).toLocaleString()}
           </span>,
         status: status
         }

@@ -16,6 +16,8 @@ export const ETHERSCAN_TX_FULL_PAGE = (txHash, network) => {
   }
 }
 
+export const NULL_ADDRESS = "0x0000000000000000000000000000000000000000"
+
 //if there is an optional button it should be placed last in the array
 export const Links = [
   {
